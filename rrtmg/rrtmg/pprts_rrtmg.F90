@@ -534,10 +534,9 @@ contains
           else
             col_tskin = atm%tlev(1,icol)
           endif
-
           call optprop_rrtm_lw(i1, ke, col_albedo,                          &
             atm%plev(:,icol), atm%tlev(:,icol),                             &
-            atm%tlay(:, icol), col_tskin,                                   &
+            atm%tlay(:, icol), col_tskin, atm%play(:,icol),                 &!added plev (MENN)
             atm%h2o_lay(:,icol), atm%o3_lay (:,icol), atm%co2_lay(:,icol),  &
             atm%ch4_lay(:,icol), atm%n2o_lay(:,icol), atm%o2_lay (:,icol) , &
             atm%lwc(:,icol)*integral_coeff, atm%reliq(:, icol),             &
@@ -574,7 +573,7 @@ contains
 
           call optprop_rrtm_lw(i1, ke, col_albedo,                          &
             atm%plev(:,icol), atm%tlev(:, icol),                            &
-            atm%tlay(:, icol), col_tskin,                                   &
+            atm%tlay(:, icol), col_tskin,atm%play(:,icol),                  &
             atm%h2o_lay(:,icol), atm%o3_lay (:,icol), atm%co2_lay(:,icol),  &
             atm%ch4_lay(:,icol), atm%n2o_lay(:,icol), atm%o2_lay (:,icol) , &
             atm%lwc(:,icol)*integral_coeff, atm%reliq(:, icol),             &
@@ -694,18 +693,18 @@ contains
                 col_dtau   = max(tiny(col_dtau), real(reverse(tau(:,i,j,ib))))
                 wvnms = [real(wavenum1(ngb(ib))), real(wavenum2(ngb(ib)))]
 
-                call default_flx_computation(&
-                  mu0, &
-                  S0, &
-                  col_albedo, &
-                  col_tskin, &
-                  .True., wvnms, col_Bfrac, &
-                  col_dtau, &
-                  col_w0,   &
-                  col_g,    &
-                  col_temper, &
-                  RFLDIR, RFLDN, FLUP, DFDT, UAVG, &
-                  int(nstreams), lverbose=.False.)
+  !              call default_flx_computation(&
+  !                mu0, &
+  !                S0, &
+  !                col_albedo, &
+  !                col_tskin, &
+  !                .True., wvnms, col_Bfrac, &
+  !                col_dtau, &
+  !                col_w0,   &
+  !                col_g,    &
+  !                col_temper, &
+  !                RFLDIR, RFLDN, FLUP, DFDT, UAVG, &
+  !                int(nstreams), lverbose=.False.)
 
                 eup (:,i,j) = eup (:,i,j) + FLUP
                 edn (:,i,j) = edn (:,i,j) + RFLDN
@@ -823,7 +822,7 @@ contains
           endif
           call optprop_rrtm_sw(i1, ke, &
             col_theta, col_albedo, &
-            atm%plev(:,icol), atm%tlev(:,icol), atm%tlay(:,icol), &
+            atm%plev(:,icol), atm%tlev(:,icol), atm%tlay(:,icol),atm%play(:,icol),&!added plev (MENNO)
             atm%h2o_lay(:,icol), atm%o3_lay(:,icol), atm%co2_lay(:,icol), &
             atm%ch4_lay(:,icol), atm%n2o_lay(:,icol), atm%o2_lay(:,icol), &
             atm%lwc(:,icol)*integral_coeff, atm%reliq(:,icol), &
@@ -871,7 +870,7 @@ contains
 
           call optprop_rrtm_sw(i1, ke, &
             col_theta, col_albedo, &
-            atm%plev(:,icol), atm%tlev(:,icol), atm%tlay(:,icol), &
+            atm%plev(:,icol), atm%tlev(:,icol), atm%tlay(:,icol),  atm%play(:,icol),&
             atm%h2o_lay(:,icol), atm%o3_lay(:,icol), atm%co2_lay(:,icol), &
             atm%ch4_lay(:,icol), atm%n2o_lay(:,icol), atm%o2_lay(:,icol), &
             atm%lwc(:,icol)*integral_coeff, atm%reliq(:,icol), &
@@ -974,18 +973,18 @@ contains
                 col_g      = max(tiny(col_g   ), real(reverse(g  (:,i,j,ib))))
 
                 mu0 = real(cos(deg2rad(col_theta)))
-                call default_flx_computation(&
-                  mu0, &
-                  real(edirTOA), &
-                  real(col_albedo), &
-                  col_tskin, &
-                  .False., [0., 0.], col_Bfrac, &
-                  col_dtau, &
-                  col_w0,   &
-                  col_g,    &
-                  col_temper, &
-                  RFLDIR, RFLDN, FLUP, DFDT, UAVG, &
-                  int(nstreams), lverbose=.False.)
+      !          call default_flx_computation(&
+      !            mu0, &
+      !            real(edirTOA), &
+      !            real(col_albedo), &
+      !            col_tskin, &
+      !            .False., [0., 0.], col_Bfrac, &
+      !            col_dtau, &
+      !            col_w0,   &
+      !            col_g,    &
+      !            col_temper, &
+      !            RFLDIR, RFLDN, FLUP, DFDT, UAVG, &
+      !            int(nstreams), lverbose=.False.)
 
                 edir(:,i,j) = edir(:,i,j) + RFLDIR
                 eup (:,i,j) = eup (:,i,j) + FLUP

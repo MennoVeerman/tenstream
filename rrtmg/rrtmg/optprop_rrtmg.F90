@@ -48,7 +48,7 @@ module m_optprop_rrtmg
 
 contains
   subroutine optprop_rrtm_lw(ncol_in, nlay_in, &
-      albedo, plev, tlev, tlay, tsrfc, &
+      albedo, plev, tlev, tlay, tsrfc, play, &!added play (MENNO)
       h2ovmr, o3vmr, co2vmr, ch4vmr, n2ovmr, o2vmr, &
       lwp, reliq, iwp, reice, tau, Bfrac, opt_tau_f, &
       opt_lwuflx, opt_lwdflx, opt_lwhr, opt_cldfr, log_event)
@@ -60,6 +60,7 @@ contains
     real(ireals),dimension(ncol_in,nlay_in+1), intent(in) :: plev, tlev
     real(ireals),dimension(ncol_in,nlay_in)  , intent(in) :: tlay, h2ovmr, o3vmr, co2vmr, ch4vmr, n2ovmr, o2vmr
     real(ireals),dimension(ncol_in,nlay_in)  , intent(in) :: lwp, reliq, iwp, reice
+    real(ireals),dimension(ncol_in,nlay_in)  , intent(in) :: play!added play(MENNO)
     real(ireals),dimension(ncol_in)          , intent(in) :: tsrfc
 
     real(ireals), dimension(:,:,:), intent(out) :: tau, Bfrac ! [nlay, ncol, ngptlw]
@@ -68,7 +69,7 @@ contains
     real(ireals), dimension(:,:), intent(in), optional :: opt_cldfr ! [ncol, nlay]
     PetscLogEvent, intent(in), optional :: log_event
 
-    real(rb),dimension(ncol_in,nlay_in) :: play, cldfr
+    real(rb),dimension(ncol_in,nlay_in) :: cldfr
 
     real(rb),dimension(nbndlw, ncol_in, nlay_in) :: taucld
     real(rb),dimension(ncol_in, nlay_in, nbndlw ) :: tauaer
@@ -96,11 +97,12 @@ contains
 
     ! Take average pressure and temperature as mean values for voxels --
     ! should probably use log interpolation for pressure...
-    do ilay=1,nlay
-      do icol=1,ncol
-        play(icol,ilay) = .5_rb*(plev(icol,ilay)+plev(icol,ilay+1))
-      enddo
-    enddo
+   ! do ilay=1,nlay
+   !   do icol=1,ncol
+   !     play(icol,ilay) = .5_rb*(plev(icol,ilay)+plev(icol,ilay+1)) !!removed
+   !     (MENNO)
+   !   enddo
+   ! enddo
 
     taucld   = 0;
     tauaer   = 0; lwdflxc  = 0; lwuflxc  = 0;
@@ -170,7 +172,7 @@ contains
 
   subroutine optprop_rrtm_sw(ncol_in, nlay_in, &
       theta0, albedo, &
-      plev, tlev, tlay, &
+      plev, tlev, tlay,play, & !added play(MENNO)
       h2ovmr, o3vmr, co2vmr, ch4vmr, n2ovmr, o2vmr, &
       lwp, reliq, iwp, reice, tau, w0, g, &
       opt_solar_constant, opt_cldfr, &
@@ -184,7 +186,7 @@ contains
     real(ireals),dimension(ncol_in,nlay_in+1), intent(in) :: plev, tlev
     real(ireals),dimension(ncol_in,nlay_in)  , intent(in) :: tlay, h2ovmr, o3vmr, co2vmr, ch4vmr, n2ovmr, o2vmr
     real(ireals),dimension(ncol_in,nlay_in)  , intent(in) :: lwp, reliq, iwp, reice
-
+    real(ireals),dimension(ncol_in,nlay_in)  , intent(in):: play ! added (MENNO
     real(ireals), dimension(:,:,:), intent(out) :: tau, w0, g ! [nlay, ncol, ngptsw]
 
     real(ireals), intent(in), optional :: opt_solar_constant
@@ -195,7 +197,7 @@ contains
     real(ireals), dimension(:,:,:), intent(out),optional :: opt_tau_f, opt_w0_f, opt_g_f ! [nlay, ncol, ngptsw]
     PetscLogEvent, intent(in), optional :: log_event
 
-    real(rb),dimension(ncol_in,nlay_in) :: play, cldfr
+    real(rb),dimension(ncol_in,nlay_in) :: cldfr !removed play (MENNO)
 
     real(rb),dimension(nbndsw, ncol_in, nlay_in) :: taucld, ssacld, asmcld, fsfcld
     real(rb),dimension(ncol_in, nlay_in, nbndsw ) :: tauaer, ssaaer, asmaer
@@ -234,8 +236,8 @@ contains
     ! Take average pressure and temperature as mean values for voxels --
     ! Todo: should we use log interpolation for pressure...?
     do icol=1,ncol
-      play(icol,:) = .5_rb*(plev(icol,1:nlay)+plev(icol,2:nlay+1))
-
+      !play(icol,:) = .5_rb*(plev(icol,1:nlay)+plev(icol,2:nlay+1)) !removed
+      !(MENNO)
       tsfc(icol)   = tlev(icol,1)
     enddo
 

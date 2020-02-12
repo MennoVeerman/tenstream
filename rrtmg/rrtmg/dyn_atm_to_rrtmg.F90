@@ -31,13 +31,14 @@ module m_dyn_atm_to_rrtmg
   use m_tenstr_parkind_sw, only: im => kind_im, rb => kind_rb
 
   use m_data_parameters, only : iintegers, mpiint, ireals, default_str_len, &
-    zero, one, pi, i1, i2, i9, init_mpi_data_parameters
+    zero, one, pi, i1, i2, i9, i10, init_mpi_data_parameters
 
   use m_helper_functions, only: CHKWARN, CHKERR, reverse, &
     imp_allreduce_min, imp_allreduce_max, &
     imp_bcast, read_ascii_file_2d, &
     gradient, get_arg, itoa, ftoa, &
-    meanvec, meanval, assert_arr_is_monotonous
+    meanvec, meanval, assert_arr_is_monotonous, &
+    layer_val
 
   use m_search, only: search_sorted_bisection
 
@@ -47,8 +48,9 @@ module m_dyn_atm_to_rrtmg
 
   !logical,parameter :: ldebug=.True.
   logical,parameter :: ldebug=.False.
+  logical,parameter :: lstack_level = .false.!True: use sounding p_lev to find patch  index
 
-  ! specific gas constant for dry air [J kg−1 K−1] and standard gravity on earth
+! specific gas constant for dry air [J kg−1 K−1] and standard gravity on earth
   real(ireals), parameter :: Ra  =287.058_ireals, grav  =9.80665_ireals
   real(REAL32), parameter :: Ra32=287.058_REAL32, grav32=9.80665_REAL32
   real(REAL64), parameter :: Ra64=287.058_REAL64, grav64=9.80665_REAL64
@@ -84,6 +86,7 @@ module m_dyn_atm_to_rrtmg
       ! layer quantities dim(nlay of merged grid, ncol)
       real(ireals),allocatable :: zm     (:,:) ! layer mean height        [m]
       real(ireals),allocatable :: dz     (:,:) ! vertical layer thickness [m]
+      real(ireals),allocatable :: play   (:,:) ! layer mean pressure   [Pa]
       real(ireals),allocatable :: tlay   (:,:) ! layer mean temperature   [K]
       real(ireals),allocatable :: h2o_lay(:,:) ! watervapor volume mixing ratio [e.g. 1e-3]
       real(ireals),allocatable :: o3_lay (:,:) ! ozone volume mixing ratio      [e.g. .1e-6]
@@ -266,6 +269,7 @@ module m_dyn_atm_to_rrtmg
 
       call alloc_info(atm%zm     ,'atm%zm     ')
       call alloc_info(atm%dz     ,'atm%dz     ')
+      call alloc_info(atm%play   ,'atm%play   ')
       call alloc_info(atm%tlay   ,'atm%tlay   ')
       call alloc_info(atm%h2o_lay,'atm%h2o_lay')
       call alloc_info(atm%o3_lay ,'atm%o3_lay ')
@@ -310,6 +314,7 @@ module m_dyn_atm_to_rrtmg
 
       if(allocated(atm%zm     )) deallocate(atm%zm     )
       if(allocated(atm%dz     )) deallocate(atm%dz     )
+      if(allocated(atm%play   )) deallocate(atm%play   )
       if(allocated(atm%tlay   )) deallocate(atm%tlay   )
       if(allocated(atm%tskin  )) deallocate(atm%tskin  )
       if(allocated(atm%h2o_lay)) deallocate(atm%h2o_lay)
@@ -340,6 +345,7 @@ module m_dyn_atm_to_rrtmg
 
       if(allocated(atm%zm     )) atm%zm      = reverse(atm%zm     )
       if(allocated(atm%dz     )) atm%dz      = reverse(atm%dz     )
+      if(allocated(atm%play   )) atm%play    = reverse(atm%play   )
       if(allocated(atm%tlay   )) atm%tlay    = reverse(atm%tlay   )
       if(allocated(atm%h2o_lay)) atm%h2o_lay = reverse(atm%h2o_lay)
       if(allocated(atm%o3_lay )) atm%o3_lay  = reverse(atm%o3_lay )
@@ -434,22 +440,41 @@ module m_dyn_atm_to_rrtmg
           ! to handle a cornercase where dynamics and background profile are the same
           ! because sometimes it happens that the layer between dynamics grid and profile
           ! is so small that dz is very small and consequently not in LUT's
-          minval_plev = minval(d_plev(size(d_plev, dim=1), :))
-          m = floor(search_sorted_bisection(bg_atm%plev, minval_plev))
-          interface_pressures(2) = bg_atm%plev(m)
-          tmp_lay_temp = (bg_atm%tlev(m) + bg_atm%tlev(m+1)) * .5_ireals
-          minval_plev = d_plev(size(d_plev, dim=1), is)
-          do icol = is, ie
-            interface_pressures(1) = d_plev(size(d_plev, dim=1),icol)
-            dz = hydrostat_dz(abs(interface_pressures(1)-interface_pressures(2)), &
-              meanval(interface_pressures), tmp_lay_temp )
-            if(dz.lt.one) then
-              !call CHKWARN(1_mpiint, 'bg atmosphere and dynamics grid pressure are very close.' // &
-              !  'Note that I`ll drop one layer here.')
-              minval_plev = min(minval_plev, (bg_atm%plev(m) + bg_atm%plev(max(i1,m-i1)))*.5_ireals)
-            endif
-          enddo
+          if (lstack_level) then
+            minval_plev = minval(d_plev(size(d_plev, dim=1), :))
+            m = floor(search_sorted_bisection(bg_atm%plev, minval_plev))
+            interface_pressures(2) = bg_atm%plev(m)
+            tmp_lay_temp = (bg_atm%tlev(m) + bg_atm%tlev(m+1)) * .5_ireals
+            minval_plev = d_plev(size(d_plev, dim=1), is)
+            do icol = is, ie
+              interface_pressures(1) = d_plev(size(d_plev, dim=1),icol)
+              dz = hydrostat_dz(abs(interface_pressures(1)-interface_pressures(2)), &
+                meanval(interface_pressures), tmp_lay_temp )
+              if(dz.lt.one) then
+                !call CHKWARN(1_mpiint, 'bg atmosphere and dynamics grid pressure are very close.' // &
+                !  'Note that I`ll drop one layer here.')
+                minval_plev = min(minval_plev, (bg_atm%plev(m) + bg_atm%plev(max(i1,m-i1)))*.5_ireals)
+              endif
+            enddo
+          else
+            minval_plev = minval(d_plev(size(d_plev, dim=1), :))
+            m = floor(search_sorted_bisection(bg_atm%play, minval_plev))
+            interface_pressures(2) = bg_atm%play(m)
+            tmp_lay_temp = (bg_atm%tlev(m) + bg_atm%tlev(m+1)) * .5_ireals
+            minval_plev = d_plev(size(d_plev, dim=1), is)
+            do icol = is, ie
+              interface_pressures(1) = d_plev(size(d_plev, dim=1),icol)
+              dz = hydrostat_dz(abs(interface_pressures(1)-interface_pressures(2)), &
+                meanval(interface_pressures), tmp_lay_temp )
+              if(dz.lt.one) then
+                !call CHKWARN(1_mpiint, 'bg atmosphere and dynamics grid pressure are very close.' // &
+                !  'Note that I`ll drop one layer here.')
+                minval_plev = min(minval_plev, (bg_atm%play(m) + bg_atm%play(max(i1,m-i1)))*.5_ireals)
+              endif
+            enddo
 
+
+          endif
           ! index of lowermost layer in atm: search for level where height is bigger and
           ! pressure is lower
           call imp_allreduce_max(comm, maxval_hhl, global_maxheight)
@@ -460,8 +485,14 @@ module m_dyn_atm_to_rrtmg
           if(global_minplev.le.bg_atm%plev(1)) &
             call CHKERR(1_mpiint, 'background profile TOA pressure is larger than dynamics grid pressure')
 
-          l = floor(search_sorted_bisection(bg_atm%zt, global_maxheight))
-          m = floor(search_sorted_bisection(bg_atm%plev, global_minplev))
+          if (lstack_level) then
+            l = floor(search_sorted_bisection(bg_atm%zt, global_maxheight))
+            m = floor(search_sorted_bisection(bg_atm%plev, global_minplev))
+          else
+            l = floor(search_sorted_bisection(bg_atm%zt, global_maxheight))
+            m = floor(search_sorted_bisection(bg_atm%play, global_minplev)) 
+          
+          endif
           allocate(atm%atm_ke)
           atm%atm_ke = min(l,m)
           ke  = atm%atm_ke + atm%d_ke
@@ -472,6 +503,7 @@ module m_dyn_atm_to_rrtmg
           if(.not.allocated(atm%tlev   )) allocate(atm%tlev   (ke1, ie))
           if(.not.allocated(atm%zt     )) allocate(atm%zt     (ke1, ie))
           if(.not.allocated(atm%dz     )) allocate(atm%dz     (ke,  ie))
+          if(.not.allocated(atm%play   )) allocate(atm%play   (ke,  ie))
           if(.not.allocated(atm%tlay   )) allocate(atm%tlay   (ke,  ie))
           if(.not.allocated(atm%h2o_lay)) allocate(atm%h2o_lay(ke,  ie))
           if(.not.allocated(atm%o3_lay )) allocate(atm%o3_lay (ke,  ie))
@@ -483,7 +515,7 @@ module m_dyn_atm_to_rrtmg
           if(.not.allocated(atm%reliq  )) allocate(atm%reliq  (ke,  ie))
           if(.not.allocated(atm%iwc    )) allocate(atm%iwc    (ke,  ie))
           if(.not.allocated(atm%reice  )) allocate(atm%reice  (ke,  ie))
-
+          !!!!!!!!!!add play, calculate below!!!!!
           lupdate_bg_entries = .True.
         else
           lupdate_bg_entries = .False.
@@ -496,13 +528,15 @@ module m_dyn_atm_to_rrtmg
           ke1 = atm_ke + atm%d_ke1
 
           do icol=is,ie
-
             ! First merge pressure levels .. pressure is always given..
+            atm%plev(1:atm%d_ke1, icol) = d_plev(:, icol)
+            atm%play(1:atm%d_ke, icol)  = .5_rb * (atm%plev(2:atm%d_ke1,icol)+atm%plev(1:atm%d_ke1-1,icol))
             if(lupdate_bg_entries) then
               atm%plev(ke1-atm_ke+1:ke1, icol) = reverse(bg_atm%plev(1:atm_ke))
+              atm%play(atm%d_ke1:ke,icol) = reverse(layer_val(reverse(atm%plev(atm%d_ke1:ke1,icol)),3))
             endif
-            atm%plev(1:atm%d_ke1, icol) = d_plev(:, icol)
-            if(atm%plev(ke1-atm_ke+1, icol) .gt. atm%plev(atm%d_ke1, icol)) then
+
+            if (atm%plev(ke1-atm_ke+1, icol) .gt. atm%plev(atm%d_ke1, icol)) then
               print *,'background profile pressure is .ge. than uppermost pressure &
                 & level of dynamics grid -- this suggests the dynamics grid is way &
                 & off hydrostatic balance... please check', icol, &
@@ -761,17 +795,16 @@ module m_dyn_atm_to_rrtmg
         allocate(atm%ch4_lev(nlev))
         allocate(atm%n2o_lev(nlev))
         allocate(atm%o2_lev (nlev))
-
         atm%zt   = prof(:,1)*1e3
         atm%plev = prof(:,2)
         atm%tlev = prof(:,3)
         atm%h2o_lev = prof(:,7) / prof(:,4)
         atm%o3_lev  = prof(:,5) / prof(:,4)
         atm%co2_lev = prof(:,8) / prof(:,4)
-        atm%ch4_lev = atm%co2_lev / 1e2
+        atm%ch4_lev = prof(:,10) / prof(:,4)
+        !atm%ch4_lev = atm%co2_lev / 1e2
         atm%n2o_lev = prof(:,9) / prof(:,4)
         atm%o2_lev  = prof(:,6) / prof(:,4)
-
         if(ldebug .and. myid.eq.0) then
           do k=1, nlev
             print *,k,'zt', atm%zt(k), 'plev', atm%plev(k), 'T', atm%tlev(k), 'CO2', atm%co2_lev(k), &
@@ -802,17 +835,27 @@ module m_dyn_atm_to_rrtmg
       allocate(atm%ch4_lay(nlev-1))
       allocate(atm%n2o_lay(nlev-1))
       allocate(atm%o2_lay (nlev-1))
+      !atm%play    = meanvec(atm%plev   )
+      !atm%zm      = meanvec(atm%zt     )
+      !atm%dz      = -gradient(atm%zt   )
+      !atm%tlay    = meanvec(atm%tlev   )
+      !atm%h2o_lay = meanvec(atm%h2o_lev)
+      !atm%o3_lay  = meanvec(atm%o3_lev )
+      !atm%co2_lay = meanvec(atm%co2_lev)
+      !atm%ch4_lay = meanvec(atm%ch4_lev)
+      !atm%n2o_lay = meanvec(atm%n2o_lev)
+      !atm%o2_lay  = meanvec(atm%o2_lev )
 
-      atm%play    = meanvec(atm%plev   )
-      atm%zm      = meanvec(atm%zt     )
+      atm%play    = layer_val(atm%plev,3   )
+      atm%zm      = layer_val(atm%zt, 3   )
       atm%dz      = -gradient(atm%zt   )
-      atm%tlay    = meanvec(atm%tlev   )
-      atm%h2o_lay = meanvec(atm%h2o_lev)
-      atm%o3_lay  = meanvec(atm%o3_lev )
-      atm%co2_lay = meanvec(atm%co2_lev)
-      atm%ch4_lay = meanvec(atm%ch4_lev)
-      atm%n2o_lay = meanvec(atm%n2o_lev)
-      atm%o2_lay  = meanvec(atm%o2_lev )
+      atm%tlay    = layer_val(atm%tlev,2  )
+      atm%h2o_lay = layer_val(atm%h2o_lev,1)
+      atm%o3_lay  = layer_val(atm%o3_lev ,1)
+      atm%co2_lay = layer_val(atm%co2_lev,1)
+      atm%ch4_lay = layer_val(atm%ch4_lev,1)
+      atm%n2o_lay = layer_val(atm%n2o_lev,1)
+      atm%o2_lay  = layer_val(atm%o2_lev ,1)
     end subroutine
 
     pure elemental function hydrostat_dz_real32(dp, p, T)

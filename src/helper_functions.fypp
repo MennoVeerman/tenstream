@@ -46,7 +46,7 @@ module m_helper_functions
     imp_allreduce_min, imp_allreduce_max, imp_allreduce_sum, imp_allreduce_mean,                                     &
     imp_reduce_sum, imp_reduce_mean, imp_min_mean_max,                                                               &
     gradient, read_ascii_file_2d, meanvec, swap, imp_allgather_int_inplace, reorder_mpi_comm,                        &
-    CHKERR, CHKWARN, assertEqual,                                                                                    &
+    CHKERR, CHKWARN, assertEqual, layer_val,                                                                         &
     compute_normal_3d, determine_normal_direction, spherical_2_cartesian, hit_plane,                                 &
     angle_between_two_vec, angle_between_two_normed_vec, normalize_vec,                                              &
     pnt_in_triangle, distance_to_edge, rotation_matrix_world_to_local_basis, rotation_matrix_local_basis_to_world,   &
@@ -498,6 +498,23 @@ module m_helper_functions
       meanvec = (v(2:size(v))+v(1:size(v)-1))*.5_ireals
     end function
 
+    pure function layer_val(v,opt)
+      integer(iintegers), intent(in) :: opt
+      integer(kind(opt)) :: i
+      real(ireals),intent(in) :: v(:)
+      real(ireals) :: layer_val(size(v)-1)
+      real(ireals) :: v_min
+      v_min = minval(v,v>0)*0.999_ireals !just slightly smaller tan Vmin
+      if (opt==1) layer_val(1) = v(1) !gases
+      if (opt==2) layer_val(1) = 0.5_ireals*(v(1)+v(2)) !temperature
+      if (opt==3) layer_val(1) = v(2)/2._ireals !pressure
+      if (opt==3) layer_val(2) = 0.5_ireals*(v(2)+v(3)) !pressure
+      if (opt/=3) layer_val(2) = 2*v(2)-layer_val(2-1)
+      do i=3,size(v)-1
+          layer_val(i) = 2*v(i)-layer_val(i-1)
+          if (opt==1 .and. layer_val(i) < v_min) layer_val(i) = 0._ireals
+      enddo
+    end function
     !> @brief Cross product, right hand rule, a(thumb), b(pointing finger)
     pure function cross_3d_r32(a, b) result(cross_3d)
       real(REAL32), dimension(3), intent(in) :: a, b
