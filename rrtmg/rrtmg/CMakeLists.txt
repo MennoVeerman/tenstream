@@ -32,14 +32,14 @@ TARGET_LINK_LIBRARIES( pprts_rrtmg
   ${EXTLIB} ${USERLIB} ${LIBS})
 
 
-# PlexRT
-add_library( plexrt_rrtmg "plexrt_rrtmg.F90" $<TARGET_OBJECTS:tenstr_rrtmg_objs> )
-
-TARGET_LINK_LIBRARIES( plexrt_rrtmg
-  pprts_rrtm_lw
-  pprts_rrtm_sw
-  plexrt
-  f2c_twomax
-  pprts_base
-  tenstr_disort
-  ${EXTLIB} ${USERLIB} ${LIBS})
+## PlexRT
+#add_library( plexrt_rrtmg "plexrt_rrtmg.F90" $<TARGET_OBJECTS:tenstr_rrtmg_objs> )
+#
+#TARGET_LINK_LIBRARIES( plexrt_rrtmg
+#  pprts_rrtm_lw
+#  pprts_rrtm_sw
+#  plexrt
+#  f2c_twomax
+#  pprts_base
+#  tenstr_disort
+#  ${EXTLIB} ${USERLIB} ${LIBS})

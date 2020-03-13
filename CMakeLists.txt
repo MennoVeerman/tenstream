@@ -114,18 +114,18 @@ endif(AUTODETECT_MPI)
 
 
 # HDF5
-find_package( HDF5 REQUIRED ) # use this for non-cmake install of HDF5
-message(STATUS "Found HDF5    : ${HDF5_FOUND}" )
-if(${HDF5_FOUND})
-  message(STATUS "HDF5  Includes: ${HDF5_INCLUDE_DIR}" )
-  message(STATUS "HDF5 F90      : ${HDF5_BUILD_FORTRAN}" )
-  message(STATUS "HDF5 Library  : ${HDF5_LIBRARIES}")
-  include_directories(${HDF5_INCLUDE_DIR})
-  include_directories(${HDF5_FORTRAN_INCLUDE_DIR})
-  list (APPEND EXTLIB ${HDF5_LIBRARIES})
-else(${HDF5_FOUND})
-  message(WARNING "CMake could not find your HDF5 install, you may need to add the hdf5 libraries in config/<loc>.cmake by hand." )
-endif(${HDF5_FOUND})
+#find_package( HDF5 REQUIRED ) # use this for non-cmake install of HDF5
+#message(STATUS "Found HDF5    : ${HDF5_FOUND}" )
+#if(${HDF5_FOUND})
+#  message(STATUS "HDF5  Includes: ${HDF5_INCLUDE_DIR}" )
+#  message(STATUS "HDF5 F90      : ${HDF5_BUILD_FORTRAN}" )
+#  message(STATUS "HDF5 Library  : ${HDF5_LIBRARIES}")
+#  include_directories(${HDF5_INCLUDE_DIR})
+#  include_directories(${HDF5_FORTRAN_INCLUDE_DIR})
+#  list (APPEND EXTLIB ${HDF5_LIBRARIES})
+#else(${HDF5_FOUND})
+#  message(WARNING "CMake could not find your HDF5 install, you may need to add the hdf5 libraries in config/<loc>.cmake by hand." )
+#endif(${HDF5_FOUND})
 
 # NetCDF
 set (NETCDF_F90 "YES")
@@ -144,7 +144,7 @@ endif(${NETCDF_FOUND})
 
 
 # Petsc
-set(PETSCINSTALL "$ENV{PETSC_DIR}/$ENV{PETSC_ARCH}")
+set(PETSCINSTALL "$ENV{PETSC_DIR}$ENV{PETSC_ARCH}")
 MESSAGE(STATUS "Using PETSC ${PETSCINSTALL} ")
 if(NOT EXISTS "${PETSCINSTALL}" )
   message(FATAL "Directory ${PETSCINSTALL} does not exist!")
@@ -216,7 +216,7 @@ if(${_is_GNU})
     add_definitions(-D_GNU)
 endif(${_is_GNU})
 
-option(ENABLE_ALL "Enable use of all additional modules " ON)
+option(ENABLE_ALL "Enable use of all additional modules " OFF)
 if(ENABLE_ALL)
   set(ENABLE_PLEXRT ON CACHE BOOL "Enable PLEXRT" FORCE)
   set(ENABLE_PFUNIT ON CACHE BOOL "Enable PFUNIT" FORCE)
@@ -310,7 +310,7 @@ if(ENABLE_PFUNIT)
   set(CTEST_MPIRUN_FLAGS "" CACHE STRING "Additional mpiexec flags to run tests with")
 endif(ENABLE_PFUNIT)
 
-option(ENABLE_RRTM "Enable use of RRTM" OFF)
+option(ENABLE_RRTM "Enable use of RRTM" ON)
 if(ENABLE_RRTM)
 	add_subdirectory(rrtmg)
 endif(ENABLE_RRTM)
@@ -350,7 +350,7 @@ if(ENABLE_PYTHON)
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif(ENABLE_PYTHON)
 
-option(ENABLE_C_WRAPPER "Enable creation of C Wrapper " ON)
+option(ENABLE_C_WRAPPER "Enable creation of C Wrapper " OFF)
 if(ENABLE_C_WRAPPER)
 	add_subdirectory(C_wrapper)
 endif(ENABLE_C_WRAPPER)
