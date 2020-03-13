@@ -156,11 +156,9 @@ module m_dyn_atm_to_rrtmg
       real(ireals),intent(in),optional :: d_cloud_fraction(:,:) ! cloud fraction
       real(ireals),intent(in),optional :: d_surface_height(:)   ! surface height above sea     [m]
       real(ireals),intent(in),optional :: d_skin_temperature(:) ! skin tempertaure             [K]
-
+      integer(mpiint)    :: ierr
       integer(iintegers) :: icol
       PetscClassId, parameter :: cid=0
-      integer(mpiint) :: ierr
-
       if(lTOA_to_srfc) then
         call CHKERR(1_mpiint, 'currently not possible to supply dynamics input starting at the TOP,'// &
           'input should be starting at the surface')
@@ -179,7 +177,6 @@ module m_dyn_atm_to_rrtmg
         call sanitize_input(.True., atm%bg_atm%plev, atm%bg_atm%tlev, ierr, atm%bg_atm%tlay)
         call CHKERR(ierr, 'bad input in bg_atmosphere file')
       endif
-
       call check_shape_2d(d_tlev          ,size(d_plev, 1, kind=iintegers)   , size(d_plev, 2, kind=iintegers))
       call check_shape_2d(d_tlay          ,size(d_plev, 1, kind=iintegers)-1 , size(d_plev, 2, kind=iintegers))
       call check_shape_2d(d_h2ovmr        ,size(d_plev, 1, kind=iintegers)-1 , size(d_plev, 2, kind=iintegers))
@@ -194,7 +191,6 @@ module m_dyn_atm_to_rrtmg
       call check_shape_2d(d_reice         ,size(d_plev, 1, kind=iintegers)-1 , size(d_plev, 2, kind=iintegers))
       call check_shape_2d(d_cloud_fraction,size(d_plev, 1, kind=iintegers)-1 , size(d_plev, 2, kind=iintegers))
       call check_shape_1d(d_surface_height, ncol=size(d_plev, 2, kind=iintegers))
-
       do icol=lbound(d_plev,2),ubound(d_plev,2)
         if(present(d_tlay)) then
           call sanitize_input(lTOA_to_srfc, d_plev(:,icol), d_tlev(:,icol), ierr, d_tlay(:,icol))
@@ -210,7 +206,6 @@ module m_dyn_atm_to_rrtmg
         d_o2vmr, d_lwc, d_reliq, d_iwc, d_reice, &
         d_cfrac=d_cloud_fraction, &
         d_surface_height=d_surface_height)
-
       call check_shape_2d(d_tlev          , atm%d_ke1,size(d_plev, 2, kind=iintegers))
       call check_shape_2d(d_tlay          , atm%d_ke, size(d_plev, 2, kind=iintegers))
       call check_shape_2d(d_h2ovmr        , atm%d_ke, size(d_plev, 2, kind=iintegers))
@@ -230,7 +225,6 @@ module m_dyn_atm_to_rrtmg
         if(.not.allocated(atm%tskin)) allocate(atm%tskin(size(d_plev, 2, kind=iintegers)))
         atm%tskin = d_skin_temperature
       endif
-
       call PetscLogEventEnd(logs%setup_tenstr_atm, ierr); call CHKERR(ierr)
       contains
         subroutine check_shape_1d(d_arr, ncol)
@@ -473,7 +467,6 @@ module m_dyn_atm_to_rrtmg
               endif
             enddo
 
-
           endif
           ! index of lowermost layer in atm: search for level where height is bigger and
           ! pressure is lower
@@ -520,13 +513,12 @@ module m_dyn_atm_to_rrtmg
         else
           lupdate_bg_entries = .False.
         endif
-
+        
         call alloc_if_present(d_cfrac, atm%cfrac, [size(atm%lwc,dim=1,kind=iintegers), size(atm%lwc,dim=2,kind=iintegers)])
 
         associate(atm_ke => atm%atm_ke)
           ke  = atm_ke + atm%d_ke
           ke1 = atm_ke + atm%d_ke1
-
           do icol=is,ie
             ! First merge pressure levels .. pressure is always given..
             atm%plev(1:atm%d_ke1, icol) = d_plev(:, icol)
