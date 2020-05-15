@@ -48,7 +48,7 @@ module m_dyn_atm_to_rrtmg
 
   !logical,parameter :: ldebug=.True.
   logical,parameter :: ldebug=.False.
-  logical,parameter :: lstack_level = .false.!True: use sounding p_lev to find patch  index
+  logical,parameter :: lstack_level = .false.!True: use sounding p_lev  (tenstream default)
 
 ! specific gas constant for dry air [J kg−1 K−1] and standard gravity on earth
   real(ireals), parameter :: Ra  =287.058_ireals, grav  =9.80665_ireals
@@ -508,7 +508,7 @@ module m_dyn_atm_to_rrtmg
           if(.not.allocated(atm%reliq  )) allocate(atm%reliq  (ke,  ie))
           if(.not.allocated(atm%iwc    )) allocate(atm%iwc    (ke,  ie))
           if(.not.allocated(atm%reice  )) allocate(atm%reice  (ke,  ie))
-          !!!!!!!!!!add play, calculate below!!!!!
+
           lupdate_bg_entries = .True.
         else
           lupdate_bg_entries = .False.
@@ -787,6 +787,7 @@ module m_dyn_atm_to_rrtmg
         allocate(atm%ch4_lev(nlev))
         allocate(atm%n2o_lev(nlev))
         allocate(atm%o2_lev (nlev))
+
         atm%zt   = prof(:,1)*1e3
         atm%plev = prof(:,2)
         atm%tlev = prof(:,3)
@@ -794,7 +795,6 @@ module m_dyn_atm_to_rrtmg
         atm%o3_lev  = prof(:,5) / prof(:,4)
         atm%co2_lev = prof(:,8) / prof(:,4)
         atm%ch4_lev = prof(:,10) / prof(:,4)
-        !atm%ch4_lev = atm%co2_lev / 1e2
         atm%n2o_lev = prof(:,9) / prof(:,4)
         atm%o2_lev  = prof(:,6) / prof(:,4)
         if(ldebug .and. myid.eq.0) then
@@ -827,27 +827,30 @@ module m_dyn_atm_to_rrtmg
       allocate(atm%ch4_lay(nlev-1))
       allocate(atm%n2o_lay(nlev-1))
       allocate(atm%o2_lay (nlev-1))
-      !atm%play    = meanvec(atm%plev   )
-      !atm%zm      = meanvec(atm%zt     )
-      !atm%dz      = -gradient(atm%zt   )
-      !atm%tlay    = meanvec(atm%tlev   )
-      !atm%h2o_lay = meanvec(atm%h2o_lev)
-      !atm%o3_lay  = meanvec(atm%o3_lev )
-      !atm%co2_lay = meanvec(atm%co2_lev)
-      !atm%ch4_lay = meanvec(atm%ch4_lev)
-      !atm%n2o_lay = meanvec(atm%n2o_lev)
-      !atm%o2_lay  = meanvec(atm%o2_lev )
 
-      atm%play    = layer_val(atm%plev,3   )
-      atm%zm      = layer_val(atm%zt, 3   )
-      atm%dz      = -gradient(atm%zt   )
-      atm%tlay    = layer_val(atm%tlev,2  )
-      atm%h2o_lay = layer_val(atm%h2o_lev,1)
-      atm%o3_lay  = layer_val(atm%o3_lev ,1)
-      atm%co2_lay = layer_val(atm%co2_lev,1)
-      atm%ch4_lay = layer_val(atm%ch4_lev,1)
-      atm%n2o_lay = layer_val(atm%n2o_lev,1)
-      atm%o2_lay  = layer_val(atm%o2_lev ,1)
+      if (lstack_level) then
+        atm%play    = meanvec(atm%plev   )
+        atm%zm      = meanvec(atm%zt     )
+        atm%dz      = -gradient(atm%zt   )
+        atm%tlay    = meanvec(atm%tlev   )
+        atm%h2o_lay = meanvec(atm%h2o_lev)
+        atm%o3_lay  = meanvec(atm%o3_lev )
+        atm%co2_lay = meanvec(atm%co2_lev)
+        atm%ch4_lay = meanvec(atm%ch4_lev)
+        atm%n2o_lay = meanvec(atm%n2o_lev)
+        atm%o2_lay  = meanvec(atm%o2_lev )
+      else
+        atm%play    = layer_val(atm%plev,3   )
+        atm%zm      = layer_val(atm%zt, 3   )
+        atm%dz      = -gradient(atm%zt   )
+        atm%tlay    = layer_val(atm%tlev,2  )
+        atm%h2o_lay = layer_val(atm%h2o_lev,1)
+        atm%o3_lay  = layer_val(atm%o3_lev ,1)
+        atm%co2_lay = layer_val(atm%co2_lev,1)
+        atm%ch4_lay = layer_val(atm%ch4_lev,1)
+        atm%n2o_lay = layer_val(atm%n2o_lev,1)
+        atm%o2_lay  = layer_val(atm%o2_lev ,1)
+      endif
     end subroutine
 
     pure elemental function hydrostat_dz_real32(dp, p, T)
