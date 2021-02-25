@@ -396,14 +396,12 @@ contains
       call PetscOptionsGetBool(PETSC_NULL_OPTIONS, PETSC_NULL_CHARACTER , &
         "-skip_solar" , lskip_solar, lflg , ierr) ;call CHKERR(ierr)
       if(.not.lskip_solar) then
-        print *,"starting solar"
         call PetscLogStagePush(log_events%stage_rrtmg_solar, ierr); call CHKERR(ierr)
         call compute_solar(solver, atm, ie, je, ke, &
           phi0, theta0, albedo_solar, &
           edir, edn, eup, abso, opt_time=opt_time, solar_albedo_2d=solar_albedo_2d, &
           lrrtmg_only=lrrtmg_only, phi2d=phi2d, theta2d=theta2d, opt_solar_constant=opt_solar_constant)
         call PetscLogStagePop(ierr); call CHKERR(ierr) ! pop solver%logs%stage_rrtmg_solar
-        print *,"ending solar"
       endif
     endif
 
@@ -917,24 +915,7 @@ contains
     allocate(kabs(ke , i1:ie, i1:je))
     allocate(ksca(ke , i1:ie, i1:je))
     allocate(kg  (ke , i1:ie, i1:je))
-    !!!xxx = 0
-    !!!do ib=spectral_bands(1), spectral_bands(2)
-    !!!    xxx = xxx+tenstr_solsrc(ib)
-    !!!    print *,ib,tenstr_solsrc(ib)
-    !!!enddo
-    print *,"--------------------"
-    !!!print *, "total solar source",xxx
-    if (myid.eq.0) then
-    print *, "zsize",solver%C_one1%zm
-    sfcdir=0
-    sfcdif=0
-    toadir=0
-    toadif=0
-    open(333,file="spectral_flux_sfc.txt",status='replace')
-    open(334,file="spectral_flux_mid.txt",status='replace')
-    open(335,file="spectral_flux_tod.txt",status='replace')
-    endif
-
+    
     ! compute vertical index of maximum cloud top
     if (atm%cloud_top.eq.-1) then
         cld_top_idx = 0
@@ -981,20 +962,6 @@ contains
       endif
       call pprts_get_result(solver, spec_edn, spec_eup, spec_abso, spec_edir, opt_solution_uid=ib)
 
-      if (myid.eq.0) then 
-        flux_per_gpt(ib) = spec_edir(solver%C_one1%zm-cld_top_idx,1,1) + spec_edn(solver%C_one1%zm-cld_top_idx,1,1)
-        
-        toadir = toadir + spec_edir(1,1,1)
-        toadif = toadif + spec_edn(1,1,1)
-        sfcdir = sfcdir + spec_edir(solver%C_one1%zm,1,1)
-        sfcdif = sfcdif + spec_edn(solver%C_one1%zm,1,1)
-        !print *,ib,edirTOA,spec_edn(1,1,1)+spec_edir(1,1,1),spec_edir(solver%C_one1%zm,1,1)+spec_edn(solver%C_one1%zm,1,1)
-        
-        write(333, *) ib,spec_edir(solver%C_one1%zm,1,1)+spec_edn(solver%C_one1%zm,1,1)
-        write(334, *) ib,spec_edir(151,1,1)+spec_edn(151,1,1)
-        write(335, *) ib,spec_edir(2,1,1)+spec_edn(2,1,1)
-      endif
-      
       edir = edir + spec_edir
       edn  = edn  + spec_edn
       eup  = eup  + spec_eup
@@ -1031,15 +998,6 @@ contains
 
     endif
 
-    if (myid.eq.0) then
-    close(333)
-    close(334)
-    close(335)
-    print *,"toadir",toadir
-    print *,"toadif",toadif
-    print *,"sfcdir",sfcdir
-    print *,"sfcdif",sfcdif
-    endif
     contains
       function compute_solar_disort() result(ldisort_only)
         logical :: ldisort_only
