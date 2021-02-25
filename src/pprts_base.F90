@@ -51,6 +51,8 @@ module m_pprts_base
     integer(iintegers)                           :: icollapse=1
     logical                                      :: lcollapse = .False.
     type(tVec),allocatable                       :: hgrad ! horizontal gradient of heights, C_two1
+    real(ireals), allocatable, dimension(:)      :: redundant_sw_gpts !MV: array holding reduntant g-points,
+    real(ireals)                                 :: current_cld_top_idx = 0 
   end type
 
   !type t_sunangles

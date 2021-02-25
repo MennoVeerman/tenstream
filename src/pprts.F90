@@ -96,7 +96,6 @@ module m_pprts
 
     integer(iintegers) :: k,i,j
     logical :: lpetsc_is_initialized
-
     if(.not.solver%linitialized) then
 
       solver%difftop%area_divider = 1
@@ -252,14 +251,13 @@ module m_pprts
       endif
 
       call setup_atm()
-
+  
       ! init work vectors
       call init_memory(solver%C_dir, solver%C_diff, solver%incSolar, solver%b)
 
       if(present(solvername)) solver%solvername = trim(solver%solvername)//trim(solvername)
       ! init petsc logging facilities
       call setup_log_events(solver%logs, solver%solvername)
-
       solver%linitialized = .True.
     else
       print *,solver%myid,'You tried to initialize already initialized PPRTS     &
@@ -327,8 +325,9 @@ module m_pprts
           enddo
         enddo
       enddo
-      if(ltwostr_only) solver%atm%l1d = .True.
 
+      if(ltwostr_only) solver%atm%l1d = .True.
+      
       if(present(collapseindex)) then
         solver%atm%lcollapse=collapseindex.gt.i1
         solver%atm%icollapse=collapseindex
@@ -350,15 +349,14 @@ module m_pprts
 
       DMBoundaryType :: bp=DM_BOUNDARY_PERIODIC, bn=DM_BOUNDARY_NONE, bg=DM_BOUNDARY_GHOSTED
       integer(iintegers) :: Nz
-
       Nz = Nz_in
       if(present(collapseindex)) Nz = Nz_in-collapseindex+i1
-
+      
       if(solver%myid.eq.0.and.ldebug) print *,solver%myid,'Setting up the DMDA grid for',Nz,Nx,Ny,'using',solver%numnodes,'nodes'
 
       if(solver%myid.eq.0.and.ldebug) print *,solver%myid,'Configuring DMDA C_diff'
       call setup_dmda(solver%comm, solver%C_diff, Nz+1,Nx,Ny, bp, solver%difftop%dof + 2* solver%diffside%dof)
-
+      
       if(solver%myid.eq.0.and.ldebug) print *,solver%myid,'Configuring DMDA C_dir'
       if(lcycle_dir) then
         call setup_dmda(solver%comm, solver%C_dir, Nz+1,Nx,Ny, bp, solver%dirtop%dof + 2* solver%dirside%dof)
@@ -477,9 +475,8 @@ module m_pprts
     subroutine init_memory(C_dir, C_diff, incSolar,b)
       type(t_coord), intent(in) :: C_dir, C_diff
       type(tVec), intent(inout), allocatable :: b,incSolar
-
+    
       if(ltwostr_only) return
-
       if(.not.allocated(incSolar)) allocate(incSolar)
       if(.not.allocated(b)) allocate(b)
 
@@ -1710,7 +1707,6 @@ module m_pprts
       solutions(uid)%lchanged=.True.
       goto 99 ! quick exit
     endif
-
     ! --------- Calculate 1D Radiative Transfer ------------
     if(  ltwostr &
       .or. all(solver%atm%l1d.eqv..True.) &

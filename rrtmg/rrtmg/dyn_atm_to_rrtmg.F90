@@ -116,6 +116,7 @@ module m_dyn_atm_to_rrtmg
       ! d_ke+1: / d_ke1+1: gives background portion for layer/level variables
       ! size(x)-atm_ke: gives background portion
       integer(iintegers), allocatable :: atm_ke
+      integer(iintegers) :: cloud_top
       integer(iintegers) :: d_ke, d_ke1
     end type
 

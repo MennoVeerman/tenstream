@@ -40,7 +40,8 @@ module m_pprts_rrtmg
 
   use mpi, only : mpi_comm_rank
   use m_tenstr_parkind_sw, only: im => kind_im, rb => kind_rb
-  use m_tenstream_options, only: read_commandline_options
+  use m_tenstream_options, only: read_commandline_options, options_max_solution_time, ltwostr_only, &
+      twostr_ratio, ltwostr, luse_twostr_guess
   use m_data_parameters, only : init_mpi_data_parameters, &
       iintegers, ireals, zero, one, i0, i1, i2, i9,         &
       mpiint, pi, default_str_len
@@ -113,7 +114,6 @@ contains
         dz_t2b(:,i,j) = reverse(dz(:,icol))
       enddo
     enddo
-
     if(present(nxproc) .and. present(nyproc)) then
       call init_pprts(comm, zm, xm, ym, dx,dy,phi0, theta0, solver, nxproc=nxproc, nyproc=nyproc, dz3d=dz_t2b, &
         collapseindex=pprts_icollapse)
@@ -259,7 +259,7 @@ contains
       nxproc, nyproc, icollapse,                      &
       opt_time, solar_albedo_2d, thermal_albedo_2d,   &
       phi2d, theta2d,                                 &
-      opt_solar_constant)
+      opt_solar_constant, do_twostream)
 
     integer(mpiint), intent(in)     :: comm ! MPI Communicator
 
@@ -272,7 +272,7 @@ contains
 
     ! Compute solar or thermal radiative transfer. Or compute both at once.
     logical, intent(in) :: lsolar, lthermal
-
+    logical, optional, intent(in) :: do_twostream ! enable setting do_twostream during simulation
     ! nxproc dimension of nxproc is number of ranks along x-axis, and entries in nxproc are the size of local Nx
     ! nyproc dimension of nyproc is number of ranks along y-axis, and entries in nyproc are the number of local Ny
     ! if not present, we let petsc decide how to decompose the fields(probably does not fit the decomposition of a host model)
@@ -330,6 +330,13 @@ contains
     call PetscOptionsGetBool(PETSC_NULL_OPTIONS, PETSC_NULL_CHARACTER , &
       "-disort_only" , ldisort_only , lflg , ierr) ;call CHKERR(ierr)
 
+    ltwostr_only = get_arg(ltwostr_only, do_twostream)
+    if(ltwostr_only) then
+      twostr_ratio=zero
+      ltwostr=.True.
+      luse_twostr_guess=.True.
+    endif
+
     pprts_icollapse = get_arg(i1, icollapse)
     call PetscOptionsGetInt(PETSC_NULL_OPTIONS, PETSC_NULL_CHARACTER , &
                              "-pprts_collapse" , pprts_icollapse, lflg , ierr) ;call CHKERR(ierr)
@@ -371,12 +378,14 @@ contains
     call PetscOptionsGetBool(PETSC_NULL_OPTIONS, PETSC_NULL_CHARACTER , &
       "-skip_thermal" , lskip_thermal, lflg , ierr) ;call CHKERR(ierr)
     if(lthermal.and..not.lskip_thermal)then
+      print *,"starting thermal"
       call PetscLogStagePush(log_events%stage_rrtmg_thermal, ierr); call CHKERR(ierr)
       call compute_thermal(solver, atm, ie, je, ke, ke1, &
         albedo_thermal, &
         edn, eup, abso, opt_time=opt_time, lrrtmg_only=lrrtmg_only, &
         thermal_albedo_2d=thermal_albedo_2d)
       call PetscLogStagePop(ierr); call CHKERR(ierr) ! pop solver%logs%stage_rrtmg_thermal
+      print *,"ending thermal"
     endif
 
     if(lsolar) then
@@ -387,12 +396,14 @@ contains
       call PetscOptionsGetBool(PETSC_NULL_OPTIONS, PETSC_NULL_CHARACTER , &
         "-skip_solar" , lskip_solar, lflg , ierr) ;call CHKERR(ierr)
       if(.not.lskip_solar) then
+        print *,"starting solar"
         call PetscLogStagePush(log_events%stage_rrtmg_solar, ierr); call CHKERR(ierr)
         call compute_solar(solver, atm, ie, je, ke, &
           phi0, theta0, albedo_solar, &
           edir, edn, eup, abso, opt_time=opt_time, solar_albedo_2d=solar_albedo_2d, &
           lrrtmg_only=lrrtmg_only, phi2d=phi2d, theta2d=theta2d, opt_solar_constant=opt_solar_constant)
         call PetscLogStagePop(ierr); call CHKERR(ierr) ! pop solver%logs%stage_rrtmg_solar
+        print *,"ending solar"
       endif
     endif
 
@@ -505,7 +516,6 @@ contains
       enddo
       return
     endif
-
     ! Compute optical properties with RRTMG
     allocate(tau  (ke, i1:ie, i1:je, ngptlw))
     allocate(Bfrac(ke1, i1:ie, i1:je, ngptlw))
@@ -603,7 +613,7 @@ contains
     if(compute_thermal_disort()) return
 
     do ib=spectral_bands(1), spectral_bands(2)
-
+      
       if(need_new_solution(solver%comm, solver%solutions(500+ib), opt_time, solver%lenable_solutions_err_estimates)) then
         ! divide by thickness to convert from tau to coefficients per meter
         patm_dz(1:ke, i1:ie, i1:je) => atm%dz
@@ -754,14 +764,27 @@ contains
     real(ireals), pointer, dimension(:,:) :: pedir, pedn, peup, pabso
 
     real(ireals) :: col_theta, col_albedo
-
     integer(iintegers) :: i, j, k, icol, ib
+
     logical :: need_any_new_solution
 
     logical :: lflg
     integer(iintegers) :: spectral_bands(2)
-    integer(mpiint) :: ierr
-
+    integer(mpiint) :: ierr, myid
+    !-!-!
+    logical :: recompute_all_gpts
+    real(ireals),allocatable, dimension(:) :: flux_per_gpt, flux_per_gpt_sort
+    real(iintegers),allocatable, dimension(:) :: flux_per_gpt_args
+    real(ireals) ::   xxx,sfcdir,sfcdif,toadir,toadif,gpt_min,gpt_threshold,gpt_cumsum
+    integer(iintegers) :: cld_top_idx,igpt
+    gpt_threshold = real(1)   
+    call mpi_comm_rank(solver%comm, myid, ierr); call CHKERR(ierr)
+    if (myid.eq.0) then
+      allocate(flux_per_gpt(112))
+      allocate(flux_per_gpt_sort(112))
+      allocate(flux_per_gpt_args(112))
+    endif
+    !-!-!
     allocate(spec_edir(solver%C_one1%zm, solver%C_one1%xm, solver%C_one1%ym))
     allocate(spec_edn (solver%C_one1%zm, solver%C_one1%xm, solver%C_one1%ym))
     allocate(spec_eup (solver%C_one1%zm, solver%C_one1%xm, solver%C_one1%ym))
@@ -894,10 +917,49 @@ contains
     allocate(kabs(ke , i1:ie, i1:je))
     allocate(ksca(ke , i1:ie, i1:je))
     allocate(kg  (ke , i1:ie, i1:je))
+    !!!xxx = 0
+    !!!do ib=spectral_bands(1), spectral_bands(2)
+    !!!    xxx = xxx+tenstr_solsrc(ib)
+    !!!    print *,ib,tenstr_solsrc(ib)
+    !!!enddo
+    print *,"--------------------"
+    !!!print *, "total solar source",xxx
+    if (myid.eq.0) then
+    print *, "zsize",solver%C_one1%zm
+    sfcdir=0
+    sfcdif=0
+    toadir=0
+    toadif=0
+    open(333,file="spectral_flux_sfc.txt",status='replace')
+    open(334,file="spectral_flux_mid.txt",status='replace')
+    open(335,file="spectral_flux_tod.txt",status='replace')
+    endif
+
+    ! compute vertical index of maximum cloud top
+    if (atm%cloud_top.eq.-1) then
+        cld_top_idx = 0
+    else
+        ! we sample 1000 m above the maximum cloud top, else at a heigh of 2000m
+        cld_top_idx = max(real(2000./atm%dz(1,1)), real(ceiling((atm%cloud_top+1000.) / atm%dz(1,1))))
+    endif
+
+    ! if cloud top increased by more than 500 m, update cld_top_idx
+    if (abs(cld_top_idx - solver%atm%current_cld_top_idx) * atm%dz(1,1) > real(500.) .or. mod(opt_time, options_max_solution_time).eq.0) then 
+      solver%atm%current_cld_top_idx = cld_top_idx
+      recompute_all_gpts = .True.
+    else if (.not. allocated(solver%atm%redundant_sw_gpts)) then
+      solver%atm%current_cld_top_idx = cld_top_idx
+      recompute_all_gpts = .True.
+      allocate(solver%atm%redundant_sw_gpts(112))
+      solver%atm%redundant_sw_gpts(:) = 0  
+    else
+      recompute_all_gpts = .False.
+    endif
 
     do ib=spectral_bands(1), spectral_bands(2)
 
-      if(need_new_solution(solver%comm, solver%solutions(ib), opt_time, solver%lenable_solutions_err_estimates)) then
+      if(need_new_solution(solver%comm, solver%solutions(ib), opt_time, solver%lenable_solutions_err_estimates) .and. & 
+               (recompute_all_gpts .or. .not. any(solver%atm%redundant_sw_gpts.eq.ib))) then
         patm_dz(1:ke, i1:ie, i1:je) => atm%dz
         kabs = max(zero, tau(:,:,:,ib)) * (one - w0(:,:,:,ib))
         ksca = max(zero, tau(:,:,:,ib)) * w0(:,:,:,ib)
@@ -911,22 +973,73 @@ contains
         else
           edirTOA = tenstr_solsrc(ib)
         endif
-
+          
         ! dont use delta scaling here because rrtmg values should already be delta scaled
         call set_optical_properties(solver, albedo, kabs, ksca, kg, &
           albedo_2d=solar_albedo_2d, ldelta_scaling=.False.)
         call solve_pprts(solver, edirTOA, opt_solution_uid=ib, opt_solution_time=opt_time)
-
       endif
       call pprts_get_result(solver, spec_edn, spec_eup, spec_abso, spec_edir, opt_solution_uid=ib)
 
+      if (myid.eq.0) then 
+        flux_per_gpt(ib) = spec_edir(solver%C_one1%zm-cld_top_idx,1,1) + spec_edn(solver%C_one1%zm-cld_top_idx,1,1)
+        
+        toadir = toadir + spec_edir(1,1,1)
+        toadif = toadif + spec_edn(1,1,1)
+        sfcdir = sfcdir + spec_edir(solver%C_one1%zm,1,1)
+        sfcdif = sfcdif + spec_edn(solver%C_one1%zm,1,1)
+        !print *,ib,edirTOA,spec_edn(1,1,1)+spec_edir(1,1,1),spec_edir(solver%C_one1%zm,1,1)+spec_edn(solver%C_one1%zm,1,1)
+        
+        write(333, *) ib,spec_edir(solver%C_one1%zm,1,1)+spec_edn(solver%C_one1%zm,1,1)
+        write(334, *) ib,spec_edir(151,1,1)+spec_edn(151,1,1)
+        write(335, *) ib,spec_edir(2,1,1)+spec_edn(2,1,1)
+      endif
+      
       edir = edir + spec_edir
       edn  = edn  + spec_edn
       eup  = eup  + spec_eup
       abso = abso + spec_abso
 
     enddo ! ib 1 -> nbndsw , i.e. spectral integration
+    
+    ! Calculate 'redundant' g-pints
+    if (recompute_all_gpts) then
+      if (myid.eq.0) then
+        do ib=spectral_bands(1), spectral_bands(2)
+          gpt_min = minval(flux_per_gpt)
+          do igpt=spectral_bands(1), spectral_bands(2)
+            if (flux_per_gpt(igpt).eq.gpt_min) then
+              flux_per_gpt_sort(ib) = gpt_min
+              flux_per_gpt_args(ib) = igpt
+              flux_per_gpt(igpt) = 999.
+              exit
+            endif
+          enddo
+        enddo    
 
+        gpt_cumsum = real(flux_per_gpt_sort(1))
+        igpt = 1
+        do while (gpt_cumsum < gpt_threshold)
+          igpt = igpt + 1
+          gpt_cumsum = gpt_cumsum + flux_per_gpt_sort(igpt)
+        end do
+        flux_per_gpt_args(igpt:) = 0
+        solver%atm%redundant_sw_gpts = flux_per_gpt_args
+      
+      endif
+      call imp_bcast(solver%comm, solver%atm%redundant_sw_gpts, 0_mpiint)
+
+    endif
+
+    if (myid.eq.0) then
+    close(333)
+    close(334)
+    close(335)
+    print *,"toadir",toadir
+    print *,"toadif",toadif
+    print *,"sfcdir",sfcdir
+    print *,"sfcdif",sfcdif
+    endif
     contains
       function compute_solar_disort() result(ldisort_only)
         logical :: ldisort_only

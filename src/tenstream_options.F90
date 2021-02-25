@@ -187,9 +187,10 @@ contains
 
     call PetscOptionsGetBool(PETSC_NULL_OPTIONS, PETSC_NULL_CHARACTER, "-calc_nca", &
       lcalc_nca , lflg , ierr) ;call CHKERR(ierr)
-
+    
     call PetscOptionsGetBool(PETSC_NULL_OPTIONS, PETSC_NULL_CHARACTER, "-twostr_only", &
       ltwostr_only, lflg, ierr); call CHKERR(ierr)
+
     if(ltwostr_only) then
       twostr_ratio=zero
       ltwostr=.True.
