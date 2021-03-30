@@ -41,7 +41,7 @@ module m_pprts_rrtmg
   use mpi, only : mpi_comm_rank
   use m_tenstr_parkind_sw, only: im => kind_im, rb => kind_rb
   use m_tenstream_options, only: read_commandline_options, options_max_solution_time, ltwostr_only, &
-      twostr_ratio, ltwostr, luse_twostr_guess
+      twostr_ratio, ltwostr, luse_twostr_guess, lschwarzschild
   use m_data_parameters, only : init_mpi_data_parameters, &
       iintegers, ireals, zero, one, i0, i1, i2, i9,         &
       mpiint, pi, default_str_len
@@ -272,7 +272,7 @@ contains
 
     ! Compute solar or thermal radiative transfer. Or compute both at once.
     logical, intent(in) :: lsolar, lthermal
-    logical, optional, intent(in) :: do_twostream ! enable setting do_twostream during simulation
+    logical, optional, intent(in) :: do_twostream ! flag whether to use twostream (overwrites SW input, should not overwrite LW
     ! nxproc dimension of nxproc is number of ranks along x-axis, and entries in nxproc are the size of local Nx
     ! nyproc dimension of nyproc is number of ranks along y-axis, and entries in nyproc are the number of local Ny
     ! if not present, we let petsc decide how to decompose the fields(probably does not fit the decomposition of a host model)
@@ -330,11 +330,22 @@ contains
     call PetscOptionsGetBool(PETSC_NULL_OPTIONS, PETSC_NULL_CHARACTER , &
       "-disort_only" , ldisort_only , lflg , ierr) ;call CHKERR(ierr)
 
-    ltwostr_only = get_arg(ltwostr_only, do_twostream)
-    if(ltwostr_only) then
-      twostr_ratio=zero
-      ltwostr=.True.
-      luse_twostr_guess=.True.
+    if(present(do_twostream)) then
+        if (lthermal .and. lschwarzschild) then
+            ltwostr_only = .false.
+        else
+            ltwostr_only = do_twostream
+        endif
+        
+        if(ltwostr_only) then
+            twostr_ratio=zero
+            ltwostr=.True.
+            luse_twostr_guess=.True.
+        else  
+            twostr_ratio=2._ireals
+            ltwostr=.False.
+            luse_twostr_guess=.False.
+        endif
     endif
 
     pprts_icollapse = get_arg(i1, icollapse)
@@ -644,7 +655,6 @@ contains
             endif
           endif
         endif
-
         call set_optical_properties(solver, albedo, kabs, ksca, g, &
             reverse(Blev*Bfrac(:,:,:,ib)), planck_srfc=Bsrfc*Bfrac(1,:,:,ib), &
             albedo_2d=thermal_albedo_2d, ldelta_scaling=.False.)
