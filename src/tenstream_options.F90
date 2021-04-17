@@ -48,7 +48,8 @@ module m_tenstream_options
     ident_dy,               &
     options_phi,            &
     options_theta,          &
-    options_max_solution_err, options_max_solution_time
+    options_max_solution_err, options_max_solution_time,&
+    old_recompute_all_gpts_time ! menno's adaptive spectral integration
 
   integer(iintegers) :: pert_xshift, pert_yshift, mcrts_photons_per_pixel
 
@@ -128,6 +129,8 @@ contains
       print *,'If we run with -ident, you need to specify "-dx" commandline option e.g. -dx 70'
       call CHKERR(1_mpiint, 'option -ident '//trim(ident)//' requires also -dx option')
     endif
+
+    old_recompute_all_gpts_time = 0.;
 
     options_max_solution_err = 5e3_ireals/real(3600*24, ireals)
     call PetscOptionsGetReal(PETSC_NULL_OPTIONS, PETSC_NULL_CHARACTER,"-max_solution_err",&

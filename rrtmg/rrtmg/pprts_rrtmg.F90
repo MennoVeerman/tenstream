@@ -40,7 +40,7 @@ module m_pprts_rrtmg
 
   use mpi, only : mpi_comm_rank
   use m_tenstr_parkind_sw, only: im => kind_im, rb => kind_rb
-  use m_tenstream_options, only: read_commandline_options, options_max_solution_time, ltwostr_only, &
+  use m_tenstream_options, only: read_commandline_options, options_max_solution_time, ltwostr_only, old_recompute_all_gpts_time, &
       twostr_ratio, ltwostr, luse_twostr_guess, lschwarzschild
   use m_data_parameters, only : init_mpi_data_parameters, &
       iintegers, ireals, zero, one, i0, i1, i2, i9,         &
@@ -781,10 +781,10 @@ contains
     integer(mpiint) :: ierr, myid
     !-!-!
     logical :: recompute_all_gpts
-    real(ireals),allocatable, dimension(:) :: flux_per_gpt, flux_per_gpt_sort
+    real(ireals),allocatable, dimension(:) :: flux_per_gpt,flux_per_gpt_sort
     real(iintegers),allocatable, dimension(:) :: flux_per_gpt_args
     real(ireals) ::   xxx,sfcdir,sfcdif,toadir,toadif,gpt_min,gpt_threshold,gpt_cumsum
-    integer(iintegers) :: cld_top_idx,igpt
+    integer(iintegers) :: cld_top_idx,igpt !cld_top_idx is NOT the actual cloup top idx, but the index used as the level, based on cloup top, used for optimisation
     gpt_threshold = real(1)   
     call mpi_comm_rank(solver%comm, myid, ierr); call CHKERR(ierr)
     if (myid.eq.0) then
@@ -935,7 +935,7 @@ contains
     endif
 
     ! if cloud top increased by more than 500 m, update cld_top_idx
-    if (abs(cld_top_idx - solver%atm%current_cld_top_idx) * atm%dz(1,1) > real(500.) .or. mod(opt_time, options_max_solution_time).eq.0) then 
+    if (abs(cld_top_idx - solver%atm%current_cld_top_idx) * atm%dz(1,1) > real(500.) .or. ((opt_time  - old_recompute_all_gpts_time) .ge.  options_max_solution_time)) then 
       solver%atm%current_cld_top_idx = cld_top_idx
       recompute_all_gpts = .True.
     else if (.not. allocated(solver%atm%redundant_sw_gpts)) then
@@ -946,9 +946,9 @@ contains
     else
       recompute_all_gpts = .False.
     endif
+    if (recompute_all_gpts) old_recompute_all_gpts_time = opt_time
 
     do ib=spectral_bands(1), spectral_bands(2)
-
       if(need_new_solution(solver%comm, solver%solutions(ib), opt_time, solver%lenable_solutions_err_estimates) .and. & 
                (recompute_all_gpts .or. .not. any(solver%atm%redundant_sw_gpts.eq.ib))) then
         patm_dz(1:ke, i1:ie, i1:je) => atm%dz
@@ -977,7 +977,9 @@ contains
       eup  = eup  + spec_eup
       abso = abso + spec_abso
 
-    enddo ! ib 1 -> nbndsw , i.e. spectral integration
+      call imp_allreduce_mean(solver%comm,  spec_edir(solver%C_one1%zm-cld_top_idx,:,:) + spec_edn(solver%C_one1%zm-cld_top_idx,:,:), flux_per_gpt(ib))
+
+  enddo ! ib 1 -> nbndsw , i.e. spectral integration
     
     ! Calculate 'redundant' g-pints
     if (recompute_all_gpts) then
