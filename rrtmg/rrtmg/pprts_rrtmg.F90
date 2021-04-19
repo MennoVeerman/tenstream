@@ -50,7 +50,7 @@ module m_pprts_rrtmg
       pprts_get_result, pprts_get_result_toZero
   use m_adaptive_spectral_integration, only: need_new_solution
   use m_helper_functions, only : read_ascii_file_2d, gradient, meanvec, imp_bcast, &
-      imp_allreduce_min, imp_allreduce_max, imp_allreduce_mean, mpi_logical_all_same, &
+      imp_allreduce_min, imp_allreduce_max, imp_allreduce_mean, mpi_logical_all_same, imp_reduce_mean, &
       CHKERR, deg2rad, get_arg, &
       reverse, approx, itoa, spherical_2_cartesian
   use m_search, only: find_real_location
@@ -977,7 +977,7 @@ contains
       eup  = eup  + spec_eup
       abso = abso + spec_abso
 
-      call imp_allreduce_mean(solver%comm,  spec_edir(solver%C_one1%zm-cld_top_idx,:,:) + spec_edn(solver%C_one1%zm-cld_top_idx,:,:), flux_per_gpt(ib))
+      call imp_reduce_mean(solver%comm,  spec_edir(solver%C_one1%zm-cld_top_idx,:,:) + spec_edn(solver%C_one1%zm-cld_top_idx,:,:), flux_per_gpt(ib))
 
   enddo ! ib 1 -> nbndsw , i.e. spectral integration
     
