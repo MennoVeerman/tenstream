@@ -319,6 +319,7 @@ option(ENABLE_EXAMPLES "Enable compilation of EXAMPLES" OFF)
 if(ENABLE_EXAMPLES)
 	add_subdirectory(examples)
 endif(ENABLE_EXAMPLES)
+add_subdirectory(standalone_from_dales)
 
 find_program(CTAGS_PATH ctags)
 if(CTAGS_PATH)
