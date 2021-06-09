@@ -61,7 +61,6 @@ contains
     ! Load LibRadtran Cloud File
     !call get_global_attribute(cldfile, 'dx', dx)
     !call get_global_attribute(cldfile, 'dy', dy)
-  print *,"START"
   if (myid.eq.0) then
     groups(1) = trim(cldfile)
     groups(2) = trim('lwc'); call ncload(groups, lwc, ierr); call CHKERR(ierr)
@@ -73,18 +72,15 @@ contains
     groups(2) = trim('x'); call ncload(groups, xx, ierr); call CHKERR(ierr)
     groups(2) = trim('y'); call ncload(groups, yy, ierr); call CHKERR(ierr)
     endif
-  print *,"end"
+
     call imp_bcast(comm,lwc,0_mpiint)
     call imp_bcast(comm,reliq,0_mpiint)
-  print *,"--------------------"
     call imp_bcast(comm,hhl,0_mpiint)
     call imp_bcast(comm,plev,0_mpiint)
     call imp_bcast(comm,tlay,0_mpiint)
-  print *,"PPPPPPPPPPPPPPPPPPPP"
     call imp_bcast(comm,tsfc,0_mpiint)
     call imp_bcast(comm,xx,0_mpiint)
     call imp_bcast(comm,yy,0_mpiint)
-  print *,"XXXXXXXXXXXXXXXXXXXX"
     if(size(lwc  ,dim=2).eq.1) call resize_arr(3_iintegers, lwc  , dim=2, lrepeat=.True.)
     if(size(reliq,dim=2).eq.1) call resize_arr(3_iintegers, reliq, dim=2, lrepeat=.True.)
 
@@ -136,11 +132,13 @@ contains
     allocate(plev_local(nzp+1,nxp,nyp))
     allocate(tlay_local(nzp,nxp,nyp))
     allocate(tsfc_local(nxp,nyp))
+
     lwc_local = lwc(:, is:ie, js:je)
     reliq_local = reliq(:, is:ie, js:je)
     plev_local = plev(:, is:ie, js:je)
     tlay_local = tlay(:, is:ie, js:je)
     tsfc_local = tsfc(is:ie, js:je)
+    
     deallocate(lwc)
     deallocate(reliq)
     deallocate(plev)
@@ -149,7 +147,6 @@ contains
     call mpi_barrier(comm, ierr)
     reliq_local = min(max(reliq_local(:,:,:), 2.5), 60.)
     
-    ! Start with a dynamics grid starting at 1000 hPa with a specified lapse rate and surface temperature
     allocate(tlev(nzp+1, nxp, nyp))
     tlev(1,:,:) = Tsfc_local
     do k=2,nzp

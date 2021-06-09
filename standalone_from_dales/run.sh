@@ -1,21 +1,20 @@
 #!/bin/bash
-BIN=/home/mveerman/tenstream/build/bin/run_cld_fld
-#make -j -C $(dirname $BIN)/.. $(basename $BIN) 
+
+TENSTREAM_SRC=$HOME/tenstream
+EXE=${TENSTREAM_SRC}/build/bin/run_cld_fld
+PTH=/scratch-shared/<...>/<...>/<...>
 
 RUN="srun -p short -n 240 -t 00:15:00 --constraint=haswell"
-TENSTREAM_SRC=$HOME/tenstream
-CLDFILE=/scratch-shared/mveerman/dales_20160815/rrtmgp_100m/cloud_field.nc
-ATMFILE=${TENSTREAM_SRC}/examples/mytest/afglus_100m.dat
-OUTDIR=/scratch-shared/mveerman/tenstream_offline
+CLDFILE=${PTH}/cloud_field.nc
+ATMFILE=${PTH}/afglus_100m.dat
+OUTDIR=${PTH}
 
 BASE_OPT="-thermal no"
-OUT=$OUTDIR/output_sw.nc
-OPT=$BASE_OPT
-echo $RUN $BIN -cld $CLDFILE -atm_filename $ATMFILE -out $OUT $OPT
-[ ! -e $OUT ] && $RUN $BIN -cld $CLDFILE -atm_filename $ATMFILE -out $OUT $OPT
 
-echo $OUT
-echo $OPT
+OUT=$OUTDIR/sw_tenstream.nc
+OPT=$BASE_OPT
+
+[ ! -e $OUT ] && $RUN $EXE -cld $CLDFILE -atm_filename $ATMFILE -out $OUT $OPT
 
 
 
