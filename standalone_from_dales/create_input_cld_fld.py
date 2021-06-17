@@ -55,7 +55,7 @@ def calc_plev(p_lay):
 def load_vars(xxx,yyy, itime, lock):
     nc_in = nc.Dataset(basename.format(xxx,yyy,sim_name))
     lwc = nc_in.variables['ql'][itime] * 1e-5 * 1e3 #g/kg
-    lwc = np.swapaxes(lwc, 0, 2)
+    lwc = lwc.swapaxes(0,2).swapaxes(0,1)
     x0,x1 = xxx*len(x_local), (xxx+1)*len(x_local)
     y0,y1 = yyy*len(y_local), (yyy+1)*len(y_local)
     
@@ -63,7 +63,7 @@ def load_vars(xxx,yyy, itime, lock):
     p_lay = np.loadtxt(basename_fld.format(sim_name))[itime*len(z_lay):(itime+1)*len(z_lay),2]
     p_lev = calc_plev(p_lay)
     
-    thl = nc_in.variables['thl'][itime].swapaxes(0,2)
+    thl = nc_in.variables['thl'][itime].swapaxes(0,2).swapaxes(0,1)
     tabs = calc_tabs(thl, lwc, p0/p_lay[np.newaxis,np.newaxis,:])
     
     nc_in.close()
@@ -77,11 +77,11 @@ def load_vars(xxx,yyy, itime, lock):
     out_tabs = ncf.variables['tabs']
     out_tsfc = ncf.variables['tsfc']
     
-    out_lwc[x0:x1, y0:y1, :] = lwc
-    out_lre[x0:x1, y0:y1, :] = calc_re(lwc)
-    out_plev[x0:x1, y0:y1, :] = p_lev[np.newaxis,np.newaxis,:]
-    out_tabs[x0:x1, y0:y1, :] = tabs
-    out_tsfc[x0:x1,y0:y1] = nc.Dataset(basename_sfc.format(xxx,yyy,sim_name)).variables['tskin'][itime].swapaxes(0,1) * (p0/p_lev[0])**-.286
+    out_lwc[y0:y1, x0:x1, :] = lwc
+    out_lre[y0:y1, x0:x1, :] = calc_re(lwc)
+    out_plev[y0:y1, x0:x1, :] = p_lev[np.newaxis,np.newaxis,:]
+    out_tabs[y0:y1, x0:x1, :] = tabs
+    out_tsfc[y0:y1,x0:x1] = nc.Dataset(basename_sfc.format(xxx,yyy,sim_name)).variables['tskin'][itime] * (p0/p_lev[0])**-.286
 
     ncf.close()
     
@@ -126,11 +126,11 @@ if __name__ == '__main__':
     nc_x[:] = np.arange(0, nx*dx, dx) + dx/2.
     nc_y[:] = np.arange(0, ny*dy, dy) + dy/2.
     
-    nc_lwc = ncf.createVariable('lwc', "f8", ("x","y","z_lay"))
-    nc_reff = ncf.createVariable('reff', "f8", ("x","y","z_lay"))
-    nc_plev = ncf.createVariable('plev', "f8", ("x","y","z_lev"))
-    nc_tabs = ncf.createVariable('tabs', "f8", ("x","y","z_lay"))
-    nc_tsfc = ncf.createVariable('tsfc', "f8", ("x","y"))
+    nc_lwc = ncf.createVariable('lwc', "f8", ("y","x","z_lay"))
+    nc_reff = ncf.createVariable('reff', "f8", ("y","x","z_lay"))
+    nc_plev = ncf.createVariable('plev', "f8", ("y","x","z_lev"))
+    nc_tabs = ncf.createVariable('tabs', "f8", ("y","x","z_lay"))
+    nc_tsfc = ncf.createVariable('tsfc', "f8", ("y","x"))
     ncf.close()   
 
     n_cpu = mp.cpu_count() if args.n_proc==-1 else args.n_proc
